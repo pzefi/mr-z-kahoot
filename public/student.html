@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student Join | Mr. Z's Kahoot</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="brand-mark">x²</span><span>Mr. Z's Kahoot</span></div>
+    <div class="muted">Student mode</div>
+  </header>
+
+  <main class="wrapper app-grid">
+    <section class="panel">
+      <h1>Join the game</h1>
+      <p class="subtext">Enter the room code your teacher gave you and your name.</p>
+
+      <form id="join-form">
+        <div class="form-row">
+          <input id="room-input" type="text" maxlength="6" placeholder="Room code" required />
+          <input id="name-input" type="text" maxlength="20" placeholder="Your name" required />
+        </div>
+        <div class="controls">
+          <button class="primary" type="submit">Join room</button>
+        </div>
+      </form>
+
+      <div class="status" id="status">Waiting for the room...</div>
+    </section>
+
+    <section class="panel">
+      <h2>Current question</h2>
+      <div id="student-question"></div>
+      <div id="scoreboard" class="status"></div>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const joinForm = document.getElementById('join-form');
+    const roomInput = document.getElementById('room-input');
+    const nameInput = document.getElementById('name-input');
+    const status = document.getElementById('status');
+    const studentQuestion = document.getElementById('student-question');
+    const scoreboard = document.getElementById('scoreboard');
+
+    let roomCode = '';
+    let score = 0;
+
+    const sharedCode = new URLSearchParams(window.location.search).get('code');
+    if (sharedCode) {
+      roomInput.value = sharedCode.toUpperCase();
+    }
+
+    function updateQuestion(question) {
+      if (!question) {
+        studentQuestion.innerHTML = '<p class="muted">Waiting for the teacher to start.</p>';
+        return;
+      }
+
+      studentQuestion.innerHTML = `
+        <article class="question-card">
+          <div class="question-top">
+            <span class="question-kind">Question ${question.index + 1} of ${question.total}</span>
+            <span class="muted">${question.kind}</span>
+          </div>
+          <div class="question-body">
+            <div class="prompt">${question.prompt}</div>
+            <div class="answer-grid">
+              ${question.answers.map((answer) => `
+                <button class="answer-option" data-answer="${answer}" type="button">
+                  <span class="answer-dot"></span>
+                  <span>${answer}</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        </article>
+      `;
+
+      studentQuestion.querySelectorAll('.answer-option').forEach((button) => {
+        button.addEventListener('click', () => {
+          socket.emit('submit-answer', { code: roomCode, answer: button.dataset.answer });
+          studentQuestion.querySelectorAll('.answer-option').forEach((item) => {
+            item.disabled = true;
+            item.style.opacity = '0.7';
+          });
+          status.textContent = 'Answer submitted. Waiting for the next question...';
+        });
+      });
+    }
+
+    joinForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      roomCode = roomInput.value.trim().toUpperCase();
+      const name = nameInput.value.trim();
+      if (!roomCode || !name) return;
+      socket.emit('join-room', { code: roomCode, name });
+    });
+
+    socket.on('joined-room', ({ code, name }) => {
+      roomCode = code;
+      status.textContent = `Joined room ${code} as ${name}. Waiting for the teacher...`;
+      roomInput.disabled = true;
+      nameInput.disabled = true;
+      joinForm.querySelector('button[type="submit"]').disabled = true;
+    });
+
+    socket.on('join-error', ({ message }) => {
+      status.textContent = message;
+    });
+
+    socket.on('question-update', (question) => {
+      updateQuestion(question);
+      status.textContent = `Question ${question.index + 1} live — choose an answer.`;
+    });
+
+    socket.on('answer-feedback', ({ correct, score: newScore, expected, locked }) => {
+      if (locked) {
+        status.textContent = 'This question has already been answered.';
+        return;
+      }
+      score = newScore;
+      status.textContent = correct ? 'Correct! Nice work.' : `Not quite — the correct answer was: ${expected}`;
+      scoreboard.textContent = `Score: ${score}`;
+    });
+
+    socket.on('room-state', ({ students = [] }) => {
+      const me = students.find((student) => student.id === socket.id);
+      if (me) {
+        scoreboard.textContent = `Score: ${me.score}`;
+      }
+    });
+
+    socket.on('game-finished', ({ students = [] }) => {
+      const me = students.find((student) => student.id === socket.id);
+      if (me) {
+        status.textContent = `Game finished! Final score: ${me.score}`;
+      } else {
+        status.textContent = 'Game finished.';
+      }
+      studentQuestion.innerHTML = '<p class="muted">The teacher has ended this round.</p>';
+    });
+  </script>
+</body>
+</html>

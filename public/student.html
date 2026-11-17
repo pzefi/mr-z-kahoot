@@ -49,13 +49,54 @@
 
     let roomCode = '';
     let score = 0;
+    let questionTimerInterval = null;
 
     const sharedCode = new URLSearchParams(window.location.search).get('code');
     if (sharedCode) {
       roomInput.value = sharedCode.toUpperCase();
     }
 
+    function stopQuestionCountdown() {
+      if (questionTimerInterval) {
+        clearInterval(questionTimerInterval);
+        questionTimerInterval = null;
+      }
+    }
+
+    function closeQuestionCountdown() {
+      stopQuestionCountdown();
+      studentQuestion.querySelectorAll('.answer-option').forEach((button) => {
+        button.disabled = true;
+        button.style.opacity = '0.7';
+      });
+      const timer = studentQuestion.querySelector('#question-timer');
+      if (timer) timer.textContent = "Time's up";
+      status.textContent = "Time's up. Wait for the teacher's next question.";
+    }
+
+    function startQuestionCountdown(question) {
+      stopQuestionCountdown();
+      if (question.closed) {
+        closeQuestionCountdown();
+        return;
+      }
+
+      const timer = studentQuestion.querySelector('#question-timer');
+      const serverOffset = question.serverNow - Date.now();
+      const update = () => {
+        const remaining = Math.max(0, question.expiresAt - (Date.now() + serverOffset));
+        if (timer) timer.textContent = `${Math.ceil(remaining / 1000)} sec`;
+        if (remaining === 0) closeQuestionCountdown();
+      };
+
+      update();
+      if (!questionTimerInterval && question.expiresAt > Date.now() + serverOffset) {
+        questionTimerInterval = setInterval(update, 250);
+      }
+    }
+
     function updateQuestion(question) {
+      stopQuestionCountdown();
       if (!question) {
         studentQuestion.innerHTML = '<p class="muted">Waiting for the teacher to start.</p>';
         return;
@@ -66,6 +107,7 @@
           <div class="question-top">
             <span class="question-kind">Question ${question.index + 1} of ${question.total}</span>
             <span class="muted">${question.kind}</span>
+            <span class="timer" id="question-timer" aria-live="polite">30 sec</span>
           </div>
           <div class="question-body">
             <div class="prompt">${question.prompt}</div>
@@ -91,6 +133,7 @@
           status.textContent = 'Answer submitted. Waiting for the next question...';
         });
       });
+      startQuestionCountdown(question);
     }
 
     joinForm.addEventListener('submit', (event) => {
@@ -115,12 +158,18 @@
 
     socket.on('question-update', (question) => {
       updateQuestion(question);
-      status.textContent = `Question ${question.index + 1} live — choose an answer.`;
+      status.textContent = question.closed
+        ? "Time's up. Wait for the teacher's next question."
+        : `Question ${question.index + 1} live — choose an answer.`;
+    });
+
+    socket.on('question-closed', () => {
+      closeQuestionCountdown();
     });
 
     socket.on('answer-feedback', ({ correct, score: newScore, expected, locked }) => {
       if (locked) {
-        status.textContent = 'This question has already been answered.';
+        status.textContent = "Time's up, or this question has already been answered.";
         return;
       }
       score = newScore;
@@ -136,6 +185,7 @@
     });
 
     socket.on('game-finished', ({ students = [] }) => {
+      stopQuestionCountdown();
       const me = students.find((student) => student.id === socket.id);
       if (me) {
         status.textContent = `Game finished! Final score: ${me.score}`;

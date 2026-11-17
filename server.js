@@ -8,6 +8,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 const PORT = process.env.PORT || 3000;
+const QUESTION_TIME_MS = 30 * 1000;
 
 const rooms = {};
 
@@ -35,7 +36,35 @@ function resetCurrentQuestionState(room) {
   });
 }
 
-function buildQuestionPayload(question, index, total) {
+function clearQuestionTimer(room) {
+  if (room.questionTimer) {
+    clearTimeout(room.questionTimer);
+    room.questionTimer = null;
+  }
+}
+
+function closeQuestion(room) {
+  if (room.questionClosed) {
+    return;
+  }
+
+  room.questionClosed = true;
+  clearQuestionTimer(room);
+  io.to(room.code).emit('question-closed');
+}
+
+function startQuestionTimer(room) {
+  clearQuestionTimer(room);
+  room.questionClosed = false;
+  room.questionEndsAt = Date.now() + QUESTION_TIME_MS;
+  room.questionTimer = setTimeout(() => {
+    if (rooms[room.code] === room && room.active) {
+      closeQuestion(room);
+    }
+  }, QUESTION_TIME_MS);
+}
+
+function buildQuestionPayload(question, index, total, room) {
   return {
     kind: question.kind,
     prompt: question.prompt,
@@ -44,6 +73,9 @@ function buildQuestionPayload(question, index, total) {
     explanation: question.explanation,
     index,
     total,
+    expiresAt: room.questionEndsAt,
+    serverNow: Date.now(),
+    closed: room.questionClosed,
   };
 }
 
@@ -86,6 +118,7 @@ io.on('connection', (socket) => {
   socket.on('create-room', () => {
     Object.keys(rooms).forEach((code) => {
       if (rooms[code].teacherSocketId === socket.id) {
+        clearQuestionTimer(rooms[code]);
         delete rooms[code];
         io.to(code).emit('teacher-disconnected', { code });
       }
@@ -103,6 +136,9 @@ io.on('connection', (socket) => {
       active: false,
       questions: [],
       currentQuestionIndex: 0,
+      questionEndsAt: 0,
+      questionClosed: false,
+      questionTimer: null,
     };
 
     socket.join(code);
@@ -154,6 +190,7 @@ io.on('connection', (socket) => {
         room.questions[room.currentQuestionIndex],
         room.currentQuestionIndex,
         room.questions.length,
+        room,
       ));
     }
   });
@@ -172,8 +209,9 @@ io.on('connection', (socket) => {
     room.currentQuestionIndex = 0;
     room.active = true;
     resetCurrentQuestionState(room);
+    startQuestionTimer(room);
 
-    io.to(code).emit('question-update', buildQuestionPayload(room.questions[0], 0, room.questions.length));
+    io.to(code).emit('question-update', buildQuestionPayload(room.questions[0], 0, room.questions.length, room));
     io.to(code).emit('room-state', {
       roomCode: code,
       students: room.students.map((student) => ({
@@ -193,7 +231,9 @@ io.on('connection', (socket) => {
 
     const nextIndex = room.currentQuestionIndex + 1;
     if (nextIndex >= room.questions.length) {
+      clearQuestionTimer(room);
       room.active = false;
+      room.questionClosed = true;
       io.to(code).emit('game-finished', {
         roomCode: code,
         students: room.students.map((student) => ({
@@ -207,10 +247,12 @@ io.on('connection', (socket) => {
 
     room.currentQuestionIndex = nextIndex;
     resetCurrentQuestionState(room);
+    startQuestionTimer(room);
     io.to(code).emit('question-update', buildQuestionPayload(
       room.questions[room.currentQuestionIndex],
       room.currentQuestionIndex,
       room.questions.length,
+      room,
     ));
     io.to(code).emit('room-state', {
       roomCode: code,
@@ -235,6 +277,12 @@ io.on('connection', (socket) => {
     }
 
     const student = room.students.find((entry) => entry.id === socket.id);
+    if (room.questionClosed || Date.now() >= room.questionEndsAt) {
+      closeQuestion(room);
+      socket.emit('answer-feedback', { locked: true, closed: true, score: student ? student.score : 0 });
+      return;
+    }
+
     if (!student || student.answered) {
       socket.emit('answer-feedback', { locked: true, score: student ? student.score : 0 });
       return;
@@ -270,6 +318,7 @@ io.on('connection', (socket) => {
     for (const code of Object.keys(rooms)) {
       const room = rooms[code];
       if (room.teacherSocketId === socket.id) {
+        clearQuestionTimer(room);
         delete rooms[code];
         io.to(code).emit('teacher-disconnected', { code });
         return;

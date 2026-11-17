@@ -71,6 +71,7 @@
     let currentIndex = 0;
     let joinUrl = '';
     let studentLinkBases = [];
+    let questionTimerInterval = null;
 
     const coefficients = [-10, -8, -6, -4, -2, 2, 4, 6, 8, 10];
 
@@ -183,8 +184,48 @@
       return topic === 'perfect' ? perfectQuestion() : solveQuestion();
     }
 
+    function stopQuestionCountdown() {
+      if (questionTimerInterval) {
+        clearInterval(questionTimerInterval);
+        questionTimerInterval = null;
+      }
+    }
+
+    function closeQuestionCountdown() {
+      stopQuestionCountdown();
+      const timer = questionView.querySelector('#question-timer');
+      const message = questionView.querySelector('#question-status');
+      if (timer) timer.textContent = "Time's up";
+      if (message) message.textContent = 'Time is up. Move to the next question when ready.';
+    }
+
+    function startQuestionCountdown(question) {
+      stopQuestionCountdown();
+      if (question.closed) {
+        closeQuestionCountdown();
+        return;
+      }
+      if (!Number.isFinite(question.expiresAt) || !Number.isFinite(question.serverNow)) {
+        return;
+      }
+
+      const timer = questionView.querySelector('#question-timer');
+      const serverOffset = question.serverNow - Date.now();
+      const update = () => {
+        const remaining = Math.max(0, question.expiresAt - (Date.now() + serverOffset));
+        if (timer) timer.textContent = `${Math.ceil(remaining / 1000)} sec`;
+        if (remaining === 0) closeQuestionCountdown();
+      };
+
+      update();
+      if (!questionTimerInterval && question.expiresAt > Date.now() + serverOffset) {
+        questionTimerInterval = setInterval(update, 250);
+      }
+    }
+
     function renderQuestionCard(question) {
       if (!question) {
+        stopQuestionCountdown();
         questionView.innerHTML = '<p class="muted">No question yet. Generate a set to send it to students.</p>';
         return;
       }
@@ -195,6 +236,7 @@
         <div class="question-top">
           <span class="question-kind">Question ${currentIndex + 1} of ${questionSet.length}</span>
           <span class="muted">${question.kind}</span>
+          <span class="timer" id="question-timer" aria-live="polite">30 sec</span>
         </div>
         <div class="question-body">
           <div class="prompt">${question.prompt}</div>
@@ -206,11 +248,13 @@
               </button>
             `).join('')}
           </div>
+          <div class="status" id="question-status">Answers close in 30 seconds.</div>
           <div class="status">Correct answer: <strong>${question.correct}</strong></div>
         </div>
       `;
       questionView.innerHTML = '';
       questionView.appendChild(card);
+      startQuestionCountdown(question);
     }
 
     function updateStudentList(students = []) {
@@ -317,6 +361,7 @@
     });
 
     socket.on('room-created', ({ code }) => {
+      stopQuestionCountdown();
       roomCode = code;
       roomCodeDisplay.textContent = code;
       renderStudentLinks();
@@ -338,7 +383,12 @@
       }
     });
 
+    socket.on('question-closed', () => {
+      closeQuestionCountdown();
+    });
+
     socket.on('teacher-disconnected', () => {
+      stopQuestionCountdown();
       roomCode = '';
       roomCodeDisplay.textContent = '—';
       updateStudentList([]);
@@ -346,6 +396,7 @@
     });
 
     socket.on('game-finished', ({ students = [] }) => {
+      stopQuestionCountdown();
       updateStudentList(students);
       questionView.innerHTML = '<p class="muted">Game finished. The scoreboard shows the final scores.</p>';
       document.getElementById('next-question').disabled = true;

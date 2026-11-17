@@ -202,6 +202,16 @@ button {
   font-weight: 800;
 }
 
+.timer {
+  padding: 5px 9px;
+  border-radius: 7px;
+  color: var(--gold);
+  background: rgba(239, 159, 39, .1);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .question-body {
   padding: 16px;
 }

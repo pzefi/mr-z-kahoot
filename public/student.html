@@ -107,7 +107,7 @@
           <div class="question-top">
             <span class="question-kind">Question ${question.index + 1} of ${question.total}</span>
             <span class="muted">${question.kind}</span>
-            <span class="timer" id="question-timer" aria-live="polite">30 sec</span>
+            <span class="timer" id="question-timer" aria-live="polite">${question.durationSeconds || 30} sec</span>
           </div>
           <div class="question-body">
             <div class="prompt">${question.prompt}</div>

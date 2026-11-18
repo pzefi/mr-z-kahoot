@@ -22,10 +22,18 @@
         <button class="secondary" id="generate-set" type="button">Generate set</button>
         <button class="secondary" id="next-question" type="button">Next question</button>
       </div>
+      <label class="setting-row" for="question-duration">
+        Question time limit
+        <select id="question-duration">
+          <option value="30">30 seconds</option>
+          <option value="60">60 seconds</option>
+        </select>
+      </label>
 
       <div class="room-box">
         <div class="muted">Room code</div>
         <div class="code" id="room-code">—</div>
+        <button class="secondary" id="show-join-screen" type="button" disabled>Show join screen</button>
       </div>
 
       <div class="room-box">
@@ -48,6 +56,18 @@
     </section>
   </main>
 
+  <section class="join-screen" id="join-screen" aria-label="Student join screen" hidden>
+    <div class="join-screen-card">
+      <div class="brand-mark">x²</div>
+      <p class="join-screen-title">Join the math game</p>
+      <p class="join-screen-instruction">Go to this page and enter the room code:</p>
+      <a class="join-screen-url" id="join-screen-url"></a>
+      <div class="join-screen-label">ROOM CODE</div>
+      <div class="join-screen-code" id="join-screen-code">—</div>
+      <button class="secondary join-screen-exit" id="hide-join-screen" type="button">Back to teacher controls</button>
+    </div>
+  </section>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
@@ -58,11 +78,17 @@
     const studentUrls = document.getElementById('student-urls');
     const copyJoinInfo = document.getElementById('copy-join-info');
     const copyStatus = document.getElementById('copy-status');
+    const questionDurationSelect = document.getElementById('question-duration');
+    const showJoinScreen = document.getElementById('show-join-screen');
+    const joinScreen = document.getElementById('join-screen');
+    const joinScreenCode = document.getElementById('join-screen-code');
+    const joinScreenUrl = document.getElementById('join-screen-url');
     const topicSelect = document.createElement('select');
     topicSelect.innerHTML = `
-      <option value="both">Both types</option>
+      <option value="both">All question types</option>
       <option value="perfect">Perfect-square trinomials</option>
       <option value="solve">Solve by completing the square</option>
+      <option value="rewrite">Rewrite in completed-square form</option>
     `;
     topicSelect.style.marginTop = '8px';
 
@@ -73,7 +99,7 @@
     let studentLinkBases = [];
     let questionTimerInterval = null;
 
-    const coefficients = [-10, -8, -6, -4, -2, 2, 4, 6, 8, 10];
+    const coefficients = [-24, -22, -20, -18, -16, -14, -12, -10, -8, -6, -4, -2, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24];
 
     function pick(items) {
       return items[Math.floor(Math.random() * items.length)];
@@ -94,9 +120,19 @@
       return `${sign} ${coefficient}${variable || ''}`;
     }
 
-    function equation(b, c) {
+    function trinomial(b, c) {
       const constant = c < 0 ? `− ${Math.abs(c)}` : `+ ${c}`;
-      return `x² ${signedTerm(b, 'x')} ${constant} = 0`;
+      return `x² ${signedTerm(b, 'x')} ${constant}`;
+    }
+
+    function equation(b, c) {
+      return `${trinomial(b, c)} = 0`;
+    }
+
+    function squareForm(half, offset) {
+      const binomial = half < 0 ? `(x − ${Math.abs(half)})²` : `(x + ${half})²`;
+      if (offset === 0) return binomial;
+      return `${binomial} ${offset < 0 ? '−' : '+'} ${Math.abs(offset)}`;
     }
 
     function formatNumber(value) {
@@ -132,9 +168,14 @@
       }
       const answers = shuffle(Array.from(choices));
       const binomial = half < 0 ? `(x − ${Math.abs(half)})²` : `(x + ${half})²`;
+      const prompts = [
+        `Find c so x² ${signedTerm(b, 'x')} + c is a perfect-square trinomial. Then write it as a binomial squared.`,
+        `What value of c makes x² ${signedTerm(b, 'x')} + c a perfect-square trinomial? Give its squared-binomial form.`,
+        `Complete the square: choose c for x² ${signedTerm(b, 'x')} + c, then express the trinomial as a square.`,
+      ];
       return {
         kind: 'Perfect-square trinomial',
-        prompt: `Find c so x² ${signedTerm(b, 'x')} + c is a perfect-square trinomial. Then write it as a binomial squared.`,
+        prompt: pick(prompts),
         answers: answers.map((value) => `c = ${value}`),
         correct: `c = ${correct}`,
         explanation: `Take half of the x coefficient and square it: (${b}/2)² = ${correct}. The trinomial is ${binomial}.`,
@@ -144,7 +185,7 @@
     function solveQuestion() {
       const b = pick(coefficients);
       const half = b / 2;
-      const radicand = pick([-9, -4, -1, 2, 3, 5, 7, 9, 16, 25].filter((value) => half * half !== value));
+      const radicand = pick([-25, -16, -9, -4, -1, 2, 3, 5, 7, 9, 16, 25, 36, 49].filter((value) => half * half !== value));
       const c = half * half - radicand;
       const correct = rootsAnswer(-half, radicand);
       const candidates = [
@@ -171,17 +212,55 @@
       const answers = shuffle(Array.from(choices));
       const halfTerm = half < 0 ? `(x − ${Math.abs(half)})` : `(x + ${half})`;
       const completedSquare = `${halfTerm}² = ${radicand}`;
+      const prompts = [
+        `Solve by completing the square: ${equation(b, c)}`,
+        `Use completing the square to solve ${equation(b, c)}`,
+        `Solve x² ${signedTerm(b, 'x')} = ${formatNumber(-c)} by completing the square.`,
+      ];
       return {
         kind: 'Solve by completing the square',
-        prompt: `Solve by completing the square: ${equation(b, c)}`,
+        prompt: pick(prompts),
         answers,
         correct,
         explanation: `Move the constant and add (${b}/2)² to both sides: ${completedSquare}. ${correct === 'No real solutions' ? 'A real square cannot equal a negative number.' : `Take the square root of both sides to get ${correct}.`}`,
       };
     }
 
+    function rewriteQuestion() {
+      const b = pick(coefficients);
+      const half = b / 2;
+      const constant = pick([-20, -10, -4, 5, 12, 25]);
+      const offset = constant - half * half;
+      const correct = squareForm(half, offset);
+      const answers = new Set([correct]);
+      for (const candidateOffset of shuffle([offset + 1, offset - 1, offset + 4, offset - 4, offset + 7, offset - 7])) {
+        answers.add(squareForm(half, candidateOffset));
+        if (answers.size === 4) break;
+      }
+      return {
+        kind: 'Rewrite in completed-square form',
+        prompt: `Rewrite ${trinomial(b, constant)} in completed-square form.`,
+        answers: shuffle(Array.from(answers)),
+        correct,
+        explanation: `Half of ${b} is ${half}; ${half}² = ${half * half}, so the expression becomes ${correct}.`,
+      };
+    }
+
     function makeQuestion(topic) {
-      return topic === 'perfect' ? perfectQuestion() : solveQuestion();
+      if (topic === 'perfect') return perfectQuestion();
+      if (topic === 'rewrite') return rewriteQuestion();
+      return solveQuestion();
+    }
+
+    function makeUniqueQuestion(topic, usedPrompts) {
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const question = makeQuestion(topic);
+        if (!usedPrompts.has(question.prompt)) {
+          usedPrompts.add(question.prompt);
+          return question;
+        }
+      }
+      throw new Error('Could not generate 12 unique questions. Please try again.');
     }
 
     function stopQuestionCountdown() {
@@ -236,7 +315,7 @@
         <div class="question-top">
           <span class="question-kind">Question ${currentIndex + 1} of ${questionSet.length}</span>
           <span class="muted">${question.kind}</span>
-          <span class="timer" id="question-timer" aria-live="polite">30 sec</span>
+          <span class="timer" id="question-timer" aria-live="polite">${question.durationSeconds || Number(questionDurationSelect.value)} sec</span>
         </div>
         <div class="question-body">
           <div class="prompt">${question.prompt}</div>
@@ -248,8 +327,7 @@
               </button>
             `).join('')}
           </div>
-          <div class="status" id="question-status">Answers close in 30 seconds.</div>
-          <div class="status">Correct answer: <strong>${question.correct}</strong></div>
+          <div class="status" id="question-status">Answers close in ${question.durationSeconds || Number(questionDurationSelect.value)} seconds.</div>
         </div>
       `;
       questionView.innerHTML = '';
@@ -285,6 +363,21 @@
         link.textContent = url;
         studentUrls.appendChild(link);
       });
+      const studentPageUrl = joinUrl || studentLinkBases[0] || '';
+      joinScreenUrl.href = studentPageUrl;
+      joinScreenUrl.textContent = studentPageUrl.replace(/^https?:\/\//, '');
+    }
+
+    function openJoinScreen() {
+      if (!roomCode) return;
+      joinScreenCode.textContent = roomCode;
+      joinScreen.hidden = false;
+      document.body.classList.add('join-screen-open');
+    }
+
+    function closeJoinScreen() {
+      joinScreen.hidden = true;
+      document.body.classList.remove('join-screen-open');
     }
 
     fetch('/connection-info')
@@ -297,6 +390,7 @@
         joinUrl = info.networkUrls[0] || info.studentUrl;
         renderStudentLinks();
         copyJoinInfo.disabled = !roomCode;
+        showJoinScreen.disabled = !roomCode;
       })
       .catch((error) => {
         studentUrls.textContent = error.message;
@@ -320,20 +414,36 @@
 
       const topic = topicSelect.value;
       const questions = [];
-      for (let i = 0; i < 12; i += 1) {
-        const selectedTopic = topic === 'both' ? (i % 2 === 0 ? 'perfect' : 'solve') : topic;
-        questions.push(makeQuestion(selectedTopic));
+      const usedPrompts = new Set();
+      try {
+        for (let i = 0; i < 12; i += 1) {
+          const selectedTopic = topic === 'both' ? ['perfect', 'solve', 'rewrite'][i % 3] : topic;
+          questions.push(makeUniqueQuestion(selectedTopic, usedPrompts));
+        }
+      } catch (error) {
+        alert(error.message);
+        return;
       }
       questionSet = shuffle(questions);
       currentIndex = 0;
+      const durationSeconds = Number(questionDurationSelect.value);
+      questionSet.forEach((question) => {
+        question.durationSeconds = durationSeconds;
+      });
       document.getElementById('next-question').disabled = false;
       renderQuestionCard(questionSet[0]);
       document.getElementById('next-question').textContent = 'Next question';
-      socket.emit('share-questions', { code: roomCode, questions: questionSet });
+      socket.emit('share-questions', { code: roomCode, questions: questionSet, durationSeconds });
     }
 
     document.getElementById('create-room').addEventListener('click', () => {
       socket.emit('create-room');
+    });
+
+    showJoinScreen.addEventListener('click', openJoinScreen);
+    document.getElementById('hide-join-screen').addEventListener('click', closeJoinScreen);
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !joinScreen.hidden) closeJoinScreen();
     });
 
     document.getElementById('generate-set').addEventListener('click', () => {
@@ -364,6 +474,7 @@
       stopQuestionCountdown();
       roomCode = code;
       roomCodeDisplay.textContent = code;
+      showJoinScreen.disabled = false;
       renderStudentLinks();
       copyJoinInfo.disabled = !joinUrl;
       copyStatus.textContent = '';
@@ -390,7 +501,9 @@
     socket.on('teacher-disconnected', () => {
       stopQuestionCountdown();
       roomCode = '';
+      closeJoinScreen();
       roomCodeDisplay.textContent = '—';
+      showJoinScreen.disabled = true;
       updateStudentList([]);
       questionView.innerHTML = '<p class="muted">Teacher disconnected.</p>';
     });
@@ -404,6 +517,10 @@
 
     socket.on('connect_error', () => {
       questionView.innerHTML = '<p class="muted">Could not connect to the live game server. Refresh this page to try again.</p>';
+    });
+
+    socket.on('game-error', ({ message }) => {
+      alert(message);
     });
 
     const modeLabel = document.createElement('div');

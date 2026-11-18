@@ -339,25 +339,29 @@
       gap: 9px;
       padding: 9px 10px;
       border-radius: 9px;
-      color: var(--gold);
-      background: var(--blue-mid);
+      color: #ffffff;
+      background: #e21b3c;
       font-size: 13px;
       font-weight: 650;
       line-height: 1.3;
       overflow-wrap: anywhere;
     }
 
+    .answer:nth-child(2) { background: #1368ce; }
+    .answer:nth-child(3) { color: #1d2733; background: #f2c400; }
+    .answer:nth-child(4) { background: #26890c; }
+
     .answer-shape {
       flex: 0 0 15px;
       width: 15px;
       height: 15px;
       border-radius: 4px;
-      background: var(--blue-light);
+      background: rgba(255, 255, 255, .9);
     }
 
-    .answer:nth-child(2) .answer-shape { border-radius: 50%; background: var(--green); }
-    .answer:nth-child(3) .answer-shape { border-radius: 2px; background: var(--gold); transform: rotate(45deg) scale(.8); }
-    .answer:nth-child(4) .answer-shape { border-radius: 50% 50% 3px 3px; background: var(--red); }
+    .answer:nth-child(2) .answer-shape { border-radius: 50%; }
+    .answer:nth-child(3) .answer-shape { background: rgba(29, 39, 51, .85); transform: rotate(45deg) scale(.8); }
+    .answer:nth-child(4) .answer-shape { border-radius: 50% 50% 3px 3px; }
 
     .key {
       border-top: 1px solid var(--border);
@@ -446,9 +450,10 @@
         <div class="field">
           <label for="topic">Question types</label>
           <select id="topic">
-            <option value="both">Both types</option>
+            <option value="both">All question types</option>
             <option value="perfect">Perfect-square trinomials</option>
             <option value="solve">Solve by completing the square</option>
+            <option value="rewrite">Rewrite in completed-square form</option>
           </select>
         </div>
       </div>
@@ -474,7 +479,7 @@
     const prevButton = document.querySelector("#prev-question");
     const nextButton = document.querySelector("#next-question");
     const TOTAL_QUESTIONS = 12;
-    const coefficients = [-10, -8, -6, -4, -2, 2, 4, 6, 8, 10];
+    const coefficients = [-24, -22, -20, -18, -16, -14, -12, -10, -8, -6, -4, -2, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24];
 
     let allQuestions = [];
     let currentIndex = 0;
@@ -503,6 +508,11 @@
       return `x² ${signedTerm(b, "x")} ${constant} = 0`;
     }
 
+    function trinomial(b, c) {
+      const constant = c < 0 ? `− ${Math.abs(c)}` : `+ ${c}`;
+      return `x² ${signedTerm(b, "x")} ${constant}`;
+    }
+
     function perfectQuestion() {
       const b = pick(coefficients);
       const half = b / 2;
@@ -522,9 +532,14 @@
 
       const answers = shuffle(Array.from(choices));
       const binomial = half < 0 ? `(x − ${Math.abs(half)})²` : `(x + ${half})²`;
+      const prompts = [
+        `Find c so x² ${signedTerm(b, "x")} + c is a perfect-square trinomial. Then write it as a binomial squared.`,
+        `What value of c makes x² ${signedTerm(b, "x")} + c a perfect-square trinomial? Give its squared-binomial form.`,
+        `Complete the square: choose c for x² ${signedTerm(b, "x")} + c, then express the trinomial as a square.`
+      ];
       return {
         kind: "Perfect-square trinomial",
-        prompt: `Find c so x² ${signedTerm(b, "x")} + c is a perfect-square trinomial. Then write it as a binomial squared.`,
+        prompt: pick(prompts),
         answers: answers.map((value) => `c = ${value}`),
         correct: `c = ${correct}`,
         explanation: `Take half of the x coefficient and square it: (${b}/2)² = ${correct}. The trinomial is ${binomial}.`
@@ -550,7 +565,7 @@
     function solveQuestion() {
       const b = pick(coefficients);
       const half = b / 2;
-      const radicand = pick([-9, -4, -1, 2, 3, 5, 7, 9, 16, 25].filter((value) => half * half !== value));
+      const radicand = pick([-25, -16, -9, -4, -1, 2, 3, 5, 7, 9, 16, 25, 36, 49].filter((value) => half * half !== value));
       const c = half * half - radicand;
       const correct = rootsAnswer(-half, radicand);
       const candidates = [
@@ -577,17 +592,61 @@
       const answers = shuffle(Array.from(choices));
       const halfTerm = half < 0 ? `(x − ${Math.abs(half)})` : `(x + ${half})`;
       const completedSquare = `${halfTerm}² = ${radicand}`;
+      const prompts = [
+        `Solve by completing the square: ${equation(b, c)}`,
+        `Use completing the square to solve ${equation(b, c)}`,
+        `Solve x² ${signedTerm(b, "x")} = ${formatNumber(-c)} by completing the square.`
+      ];
       return {
         kind: "Solve by completing the square",
-        prompt: `Solve by completing the square: ${equation(b, c)}`,
+        prompt: pick(prompts),
         answers,
         correct,
         explanation: `Move the constant and add (${b}/2)² to both sides: ${completedSquare}. ${correct === "No real solutions" ? "A real square cannot equal a negative number." : `Take the square root of both sides to get ${correct}.`}`
       };
     }
 
+    function squareForm(half, offset) {
+      const binomial = half < 0 ? `(x − ${Math.abs(half)})²` : `(x + ${half})²`;
+      if (offset === 0) return binomial;
+      return `${binomial} ${offset < 0 ? "−" : "+"} ${Math.abs(offset)}`;
+    }
+
+    function rewriteQuestion() {
+      const b = pick(coefficients);
+      const half = b / 2;
+      const constant = pick([-20, -10, -4, 5, 12, 25]);
+      const offset = constant - half * half;
+      const correct = squareForm(half, offset);
+      const answers = new Set([correct]);
+      for (const candidateOffset of shuffle([offset + 1, offset - 1, offset + 4, offset - 4, offset + 7, offset - 7])) {
+        answers.add(squareForm(half, candidateOffset));
+        if (answers.size === 4) break;
+      }
+      return {
+        kind: "Rewrite in completed-square form",
+        prompt: `Rewrite ${trinomial(b, constant)} in completed-square form.`,
+        answers: shuffle(Array.from(answers)),
+        correct,
+        explanation: `Half of ${b} is ${half}; ${half}² = ${half * half}, so the expression becomes ${correct}.`
+      };
+    }
+
     function makeQuestion(topic) {
-      return topic === "perfect" ? perfectQuestion() : solveQuestion();
+      if (topic === "perfect") return perfectQuestion();
+      if (topic === "rewrite") return rewriteQuestion();
+      return solveQuestion();
+    }
+
+    function makeUniqueQuestion(topic, usedPrompts) {
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const question = makeQuestion(topic);
+        if (!usedPrompts.has(question.prompt)) {
+          usedPrompts.add(question.prompt);
+          return question;
+        }
+      }
+      throw new Error("Could not generate 12 unique questions. Please try again.");
     }
 
     function renderQuestion(question, index) {
@@ -653,11 +712,17 @@
     function generateSet() {
       const topic = topicSelect.value;
       const questions = [];
-      for (let index = 0; index < TOTAL_QUESTIONS; index += 1) {
-        const selectedTopic = topic === "both"
-          ? (index % 2 === 0 ? "perfect" : "solve")
-          : topic;
-        questions.push(makeQuestion(selectedTopic));
+      const usedPrompts = new Set();
+      try {
+        for (let index = 0; index < TOTAL_QUESTIONS; index += 1) {
+          const selectedTopic = topic === "both"
+            ? ["perfect", "solve", "rewrite"][index % 3]
+            : topic;
+          questions.push(makeUniqueQuestion(selectedTopic, usedPrompts));
+        }
+      } catch (error) {
+        alert(error.message);
+        return;
       }
       shuffle(questions);
       allQuestions = questions;

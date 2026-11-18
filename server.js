@@ -8,7 +8,8 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 const PORT = process.env.PORT || 3000;
-const QUESTION_TIME_MS = 30 * 1000;
+const DEFAULT_QUESTION_DURATION_SECONDS = 30;
+const QUESTION_DURATIONS_SECONDS = [30, 60];
 
 const rooms = {};
 
@@ -56,12 +57,13 @@ function closeQuestion(room) {
 function startQuestionTimer(room) {
   clearQuestionTimer(room);
   room.questionClosed = false;
-  room.questionEndsAt = Date.now() + QUESTION_TIME_MS;
+  const durationMs = room.questionDurationSeconds * 1000;
+  room.questionEndsAt = Date.now() + durationMs;
   room.questionTimer = setTimeout(() => {
     if (rooms[room.code] === room && room.active) {
       closeQuestion(room);
     }
-  }, QUESTION_TIME_MS);
+  }, durationMs);
 }
 
 function buildQuestionPayload(question, index, total, room) {
@@ -73,6 +75,7 @@ function buildQuestionPayload(question, index, total, room) {
     explanation: question.explanation,
     index,
     total,
+    durationSeconds: room.questionDurationSeconds,
     expiresAt: room.questionEndsAt,
     serverNow: Date.now(),
     closed: room.questionClosed,
@@ -136,6 +139,7 @@ io.on('connection', (socket) => {
       active: false,
       questions: [],
       currentQuestionIndex: 0,
+      questionDurationSeconds: DEFAULT_QUESTION_DURATION_SECONDS,
       questionEndsAt: 0,
       questionClosed: false,
       questionTimer: null,
@@ -195,9 +199,17 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('share-questions', ({ code, questions }) => {
+  socket.on('share-questions', ({ code, questions, durationSeconds }) => {
     const room = getRoom(String(code).toUpperCase());
     if (!room || room.teacherSocketId !== socket.id) {
+      return;
+    }
+
+    const selectedDuration = durationSeconds === undefined
+      ? DEFAULT_QUESTION_DURATION_SECONDS
+      : Number(durationSeconds);
+    if (!QUESTION_DURATIONS_SECONDS.includes(selectedDuration)) {
+      socket.emit('game-error', { message: 'Choose a 30- or 60-second question timer.' });
       return;
     }
 
@@ -207,6 +219,7 @@ io.on('connection', (socket) => {
 
     room.questions = questions;
     room.currentQuestionIndex = 0;
+    room.questionDurationSeconds = selectedDuration;
     room.active = true;
     resetCurrentQuestionState(room);
     startQuestionTimer(room);

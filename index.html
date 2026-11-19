@@ -454,6 +454,7 @@
             <option value="perfect">Perfect-square trinomials</option>
             <option value="solve">Solve by completing the square</option>
             <option value="rewrite">Rewrite in completed-square form</option>
+            <option value="elimination">Solve by elimination</option>
           </select>
         </div>
       </div>
@@ -632,15 +633,60 @@
       };
     }
 
-    function makeQuestion(topic) {
+    function pairAnswer(x, y) {
+      return `(x, y) = (${formatNumber(x)}, ${formatNumber(y)})`;
+    }
+
+    function eliminationQuestion(sequenceIndex) {
+      if (sequenceIndex % 2 === 0) {
+        const x = pick([-6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6]);
+        const y = pick([-6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6]);
+        const sum = x + y;
+        const difference = x - y;
+        const correct = pairAnswer(x, y);
+        const choices = new Set([correct]);
+        [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1], [y, x]].forEach(([candidateX, candidateY]) => {
+          if (choices.size < 4) choices.add(pairAnswer(candidateX, candidateY));
+        });
+        return {
+          kind: "Solve by elimination",
+          prompt: `Solve by elimination: x + y = ${sum}; x − y = ${difference}.`,
+          answers: shuffle(Array.from(choices)),
+          correct,
+          explanation: `Add the equations to eliminate y: 2x = ${sum + difference}, so x = ${x}. Substitute into x + y = ${sum} to get y = ${y}.`
+        };
+      }
+
+      const root = pick([1, 2, 3, 4, 5, 6]);
+      const y = pick([-5, -4, -3, -2, -1, 1, 2, 3, 4, 5]);
+      const firstConstant = root * root + y;
+      const secondConstant = root * root - y;
+      const solution = (candidateRoot, candidateY) =>
+        `(x, y) = (${formatNumber(-candidateRoot)}, ${formatNumber(candidateY)}) and (${formatNumber(candidateRoot)}, ${formatNumber(candidateY)})`;
+      const correct = solution(root, y);
+      const choices = new Set([correct]);
+      [[root + 1, y], [root + 2, y], [root, y + 1], [root, y - 1]].forEach(([candidateRoot, candidateY]) => {
+        if (choices.size < 4) choices.add(solution(candidateRoot, candidateY));
+      });
+      return {
+        kind: "Solve by elimination",
+        prompt: `Solve by elimination: x² + y = ${firstConstant}; x² − y = ${secondConstant}.`,
+        answers: shuffle(Array.from(choices)),
+        correct,
+        explanation: `Add the equations to eliminate y: 2x² = ${firstConstant + secondConstant}, so x² = ${root * root} and x = ±${root}. Substitute to get y = ${y}.`
+      };
+    }
+
+    function makeQuestion(topic, sequenceIndex) {
       if (topic === "perfect") return perfectQuestion();
       if (topic === "rewrite") return rewriteQuestion();
+      if (topic === "elimination") return eliminationQuestion(sequenceIndex);
       return solveQuestion();
     }
 
-    function makeUniqueQuestion(topic, usedPrompts) {
+    function makeUniqueQuestion(topic, usedPrompts, sequenceIndex) {
       for (let attempt = 0; attempt < 100; attempt += 1) {
-        const question = makeQuestion(topic);
+        const question = makeQuestion(topic, sequenceIndex);
         if (!usedPrompts.has(question.prompt)) {
           usedPrompts.add(question.prompt);
           return question;
@@ -718,13 +764,13 @@
           const selectedTopic = topic === "both"
             ? ["perfect", "solve", "rewrite"][index % 3]
             : topic;
-          questions.push(makeUniqueQuestion(selectedTopic, usedPrompts));
+          questions.push(makeUniqueQuestion(selectedTopic, usedPrompts, index));
         }
       } catch (error) {
         alert(error.message);
         return;
       }
-      shuffle(questions);
+      if (topic !== "elimination") shuffle(questions);
       allQuestions = questions;
       currentIndex = 0;
       renderCurrentQuestion();

@@ -9,7 +9,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 const DEFAULT_QUESTION_DURATION_SECONDS = 30;
-const QUESTION_DURATIONS_SECONDS = [30, 60];
+const QUESTION_DURATIONS_SECONDS = [30, 60, 90, 120];
 
 const rooms = {};
 
@@ -209,7 +209,7 @@ io.on('connection', (socket) => {
       ? DEFAULT_QUESTION_DURATION_SECONDS
       : Number(durationSeconds);
     if (!QUESTION_DURATIONS_SECONDS.includes(selectedDuration)) {
-      socket.emit('game-error', { message: 'Choose a 30- or 60-second question timer.' });
+      socket.emit('game-error', { message: 'Choose a 30-, 60-, 90-, or 120-second question timer.' });
       return;
     }
 

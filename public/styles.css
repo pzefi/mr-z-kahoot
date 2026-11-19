@@ -304,6 +304,30 @@ button {
   margin-bottom: 18px;
 }
 
+.prompt > p { margin: 0; }
+
+.equation-system {
+  display: grid;
+  width: max-content;
+  max-width: 100%;
+  margin-top: .45em;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.equation-line {
+  display: grid;
+  grid-template-columns: 3ch 2ch 2ch 2ch max-content;
+  align-items: baseline;
+}
+
+.equation-sign,
+.equation-y,
+.equation-equals {
+  text-align: center;
+}
+
 .answer-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

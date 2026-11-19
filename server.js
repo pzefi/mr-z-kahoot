@@ -70,6 +70,7 @@ function buildQuestionPayload(question, index, total, room) {
   return {
     kind: question.kind,
     prompt: question.prompt,
+    equations: question.equations,
     answers: question.answers,
     correct: question.correct,
     explanation: question.explanation,

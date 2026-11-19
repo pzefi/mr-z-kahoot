@@ -95,6 +95,22 @@
       }
     }
 
+    function questionPromptMarkup(question) {
+      if (!question.equations) {
+        return `<div class="prompt">${question.prompt}</div>`;
+      }
+      const rows = question.equations.map((equation) => `
+        <div class="equation-line">
+          <span class="equation-x">${equation.xTerm}</span>
+          <span class="equation-sign">${equation.ySign}</span>
+          <span class="equation-y">${equation.yTerm}</span>
+          <span class="equation-equals">=</span>
+          <span class="equation-result">${equation.result}</span>
+        </div>
+      `).join('');
+      return `<div class="prompt">Solve by elimination:<div class="equation-system" role="group" aria-label="System of equations">${rows}</div></div>`;
+    }
+
     function updateQuestion(question) {
       stopQuestionCountdown();
       if (!question) {
@@ -110,7 +126,7 @@
             <span class="timer" id="question-timer" aria-live="polite">${question.durationSeconds || 30} sec</span>
           </div>
           <div class="question-body">
-            <div class="prompt">${question.prompt}</div>
+            ${questionPromptMarkup(question)}
             <div class="answer-grid">
               ${question.answers.map((answer) => `
                 <button class="answer-option" data-answer="${answer}" type="button">

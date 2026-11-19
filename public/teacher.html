@@ -267,6 +267,10 @@
         return {
           kind: 'Solve by elimination',
           prompt: `Solve by elimination: x + y = ${sum}; x − y = ${difference}.`,
+          equations: [
+            { xTerm: 'x', ySign: '+', yTerm: 'y', result: sum },
+            { xTerm: 'x', ySign: '−', yTerm: 'y', result: difference },
+          ],
           answers: shuffle(Array.from(choices)),
           correct,
           explanation: `Add the equations to eliminate y: 2x = ${sum + difference}, so x = ${x}. Substitute into x + y = ${sum} to get y = ${y}.`,
@@ -287,6 +291,10 @@
       return {
         kind: 'Solve by elimination',
         prompt: `Solve by elimination: x² + y = ${firstConstant}; x² − y = ${secondConstant}.`,
+        equations: [
+          { xTerm: 'x²', ySign: '+', yTerm: 'y', result: firstConstant },
+          { xTerm: 'x²', ySign: '−', yTerm: 'y', result: secondConstant },
+        ],
         answers: shuffle(Array.from(choices)),
         correct,
         explanation: `Add the equations to eliminate y: 2x² = ${firstConstant + secondConstant}, so x² = ${root * root} and x = ±${root}. Substitute to get y = ${y}.`,
@@ -309,6 +317,22 @@
         }
       }
       throw new Error('Could not generate 12 unique questions. Please try again.');
+    }
+
+    function questionPromptMarkup(question) {
+      if (!question.equations) {
+        return `<div class="prompt">${question.prompt}</div>`;
+      }
+      const rows = question.equations.map((equation) => `
+        <div class="equation-line">
+          <span class="equation-x">${equation.xTerm}</span>
+          <span class="equation-sign">${equation.ySign}</span>
+          <span class="equation-y">${equation.yTerm}</span>
+          <span class="equation-equals">=</span>
+          <span class="equation-result">${equation.result}</span>
+        </div>
+      `).join('');
+      return `<div class="prompt">Solve by elimination:<div class="equation-system" role="group" aria-label="System of equations">${rows}</div></div>`;
     }
 
     function stopQuestionCountdown() {
@@ -366,7 +390,7 @@
           <span class="timer" id="question-timer" aria-live="polite">${question.durationSeconds || Number(questionDurationSelect.value)} sec</span>
         </div>
         <div class="question-body">
-          <div class="prompt">${question.prompt}</div>
+          ${questionPromptMarkup(question)}
           <div class="answer-grid">
             ${question.answers.map((answer) => `
               <button class="answer-option" type="button" data-answer="${answer}">

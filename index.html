@@ -651,6 +651,10 @@
         return {
           kind: "Solve by elimination",
           prompt: `Solve by elimination: x + y = ${sum}; x − y = ${difference}.`,
+          equations: [
+            { xTerm: "x", ySign: "+", yTerm: "y", result: sum },
+            { xTerm: "x", ySign: "−", yTerm: "y", result: difference }
+          ],
           answers: shuffle(Array.from(choices)),
           correct,
           explanation: `Add the equations to eliminate y: 2x = ${sum + difference}, so x = ${x}. Substitute into x + y = ${sum} to get y = ${y}.`
@@ -671,6 +675,10 @@
       return {
         kind: "Solve by elimination",
         prompt: `Solve by elimination: x² + y = ${firstConstant}; x² − y = ${secondConstant}.`,
+        equations: [
+          { xTerm: "x²", ySign: "+", yTerm: "y", result: firstConstant },
+          { xTerm: "x²", ySign: "−", yTerm: "y", result: secondConstant }
+        ],
         answers: shuffle(Array.from(choices)),
         correct,
         explanation: `Add the equations to eliminate y: 2x² = ${firstConstant + secondConstant}, so x² = ${root * root} and x = ±${root}. Substitute to get y = ${y}.`
@@ -711,9 +719,29 @@
 
       const body = document.createElement("div");
       body.className = "question-body";
-      const prompt = document.createElement("p");
+      const prompt = document.createElement("div");
       prompt.className = "prompt";
-      prompt.textContent = question.prompt;
+      const instruction = document.createElement("p");
+      instruction.textContent = question.equations ? "Solve by elimination:" : question.prompt;
+      prompt.append(instruction);
+      if (question.equations) {
+        const system = document.createElement("div");
+        system.className = "equation-system";
+        system.setAttribute("role", "group");
+        system.setAttribute("aria-label", "System of equations");
+        question.equations.forEach((equation) => {
+          const row = document.createElement("div");
+          row.className = "equation-line";
+          [equation.xTerm, equation.ySign, equation.yTerm, "=", equation.result].forEach((value, cellIndex) => {
+            const cell = document.createElement("span");
+            cell.className = ["equation-x", "equation-sign", "equation-y", "equation-equals", "equation-result"][cellIndex];
+            cell.textContent = value;
+            row.append(cell);
+          });
+          system.append(row);
+        });
+        prompt.append(system);
+      }
       const answers = document.createElement("div");
       answers.className = "answers";
       question.answers.forEach((answer) => {

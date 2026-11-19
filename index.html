@@ -326,6 +326,29 @@
       line-height: 1.45;
     }
 
+    .equation-system {
+      display: grid;
+      width: max-content;
+      max-width: 100%;
+      margin-top: .45em;
+      font-family: Georgia, "Times New Roman", serif;
+      font-weight: 500;
+      line-height: 1.5;
+    }
+
+    .equation-line {
+      display: grid;
+      grid-template-columns: max-content max-content max-content max-content max-content;
+      column-gap: .2em;
+      align-items: baseline;
+    }
+
+    .equation-sign,
+    .equation-y,
+    .equation-equals {
+      text-align: center;
+    }
+
     .answers {
       display: grid;
       grid-template-columns: 1fr 1fr;

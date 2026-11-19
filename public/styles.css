@@ -318,7 +318,8 @@ button {
 
 .equation-line {
   display: grid;
-  grid-template-columns: 3ch 2ch 2ch 2ch max-content;
+  grid-template-columns: max-content max-content max-content max-content max-content;
+  column-gap: .2em;
   align-items: baseline;
 }
 
